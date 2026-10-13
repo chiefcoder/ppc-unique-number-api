@@ -24,6 +24,100 @@ sequenceDiagram
 	A-->>C: 200 Resource + Payment-Receipt
 ```
 
+## System design
+
+### Server
+
+```mermaid
+flowchart TD
+	Caller[HTTP client] --> Endpoint[ASP.NET Core routes<br/>/health and /unique-number]
+	Config[MppOptions and StripeOptions] --> Charge
+	Endpoint --> Charge[MppChargeService<br/>payment orchestration]
+
+	Charge -->|No Authorization| Build[BuildChallenges]
+	Build --> Bind[ChallengeBinder<br/>HMAC challenge ID]
+	Build --> RequestShape[StripeChargeRequest + Jcs + Base64Url]
+	Bind --> Challenge[ChallengeWire]
+	RequestShape --> Challenge
+	Challenge --> Format[WwwAuthenticate.Format]
+	Format --> Required[PaymentRequiredResult<br/>HTTP 402 + WWW-Authenticate]
+	Required --> Caller
+
+	Charge -->|Authorization present| Decode[PaymentCredential.Decode]
+	Decode --> Echo[ChallengeEcho.ToWire]
+	Echo --> VerifyId[ChallengeBinder.Matches]
+	VerifyId --> Expiry[Expiry check]
+	Expiry --> Replay[ChallengeReplayStore.TryConsume]
+	Replay --> Method{Payment method}
+
+	Method -->|stripe| StripeAdapter[StripePaymentClient]
+	StripeAdapter --> Stripe[Stripe API<br/>PaymentIntent]
+	Stripe -->|Succeeded| Receipt[PaymentReceipt]
+	Method -->|demo| DemoMac[DemoPayment.Mac<br/>compute expected MAC]
+	DemoMac --> VerifyDemo[MppChargeService<br/>fixed-time MAC comparison]
+	VerifyDemo -->|Valid| Receipt
+
+	Receipt --> Issue[UniqueNumberIssuer.Next]
+	Issue --> Result[JSON resource response]
+	Result --> Paid[PaidResult<br/>Payment-Receipt header]
+	Paid --> Caller
+	VerifyId -. invalid .-> Required
+	Expiry -. expired .-> Required
+	Replay -. replay .-> Required
+	Stripe -. failed .-> Required
+	VerifyDemo -. invalid .-> Required
+
+	subgraph MPP[PaidUniqueNumber.Mpp]
+		Challenge
+		Bind
+		RequestShape
+		Format
+		Decode
+		Echo
+		VerifyId
+		DemoMac
+		Receipt
+	end
+```
+
+### Client
+
+```mermaid
+flowchart TD
+	Args[CLI URL argument] --> Program[Client Program.cs]
+	Env[Environment configuration<br/>MPP secret, Stripe secret, API version] --> Program
+	Program --> Initial[HttpClient: initial resource request]
+	Initial --> API[PaidUniqueNumber API]
+	API -->|200| Done[Print response]
+	API -->|402 + WWW-Authenticate| Parse[WwwAuthenticate.Parse]
+	Parse --> Offers[ChallengeWire offers]
+	Offers --> Select{Supported method<br/>and credentials configured?}
+
+	Select -->|stripe| StripeSpt[CreateTestSptAsync]
+	StripeSpt --> StripeTest[Stripe test helpers<br/>create Shared Payment Token]
+	StripeTest --> Spt[SPT]
+	Select -->|demo| Mac[DemoPayment.Mac<br/>challenge ID + MPP secret]
+	Spt --> StripeCredential[PaymentCredential<br/>ChallengeEcho.From + SPT payload]
+	Mac --> DemoCredential[PaymentCredential<br/>ChallengeEcho.From + MAC payload]
+	StripeCredential --> Encode[EncodeAuthorization]
+	DemoCredential --> Encode
+	Encode --> Retry[HttpClient: retry with Authorization]
+	Retry --> API
+	API -->|Resource + Payment-Receipt| Receipt[PaymentReceipt.TryDecode]
+	Receipt --> Done
+	Select -->|No match| Error[Report unsupported method]
+
+	subgraph MPP[PaidUniqueNumber.Mpp]
+		Parse
+		Offers
+		StripeCredential
+		DemoCredential
+		Mac
+		Encode
+		Receipt
+	end
+```
+
 ## Run locally (demo payment)
 
 Terminal 1:
