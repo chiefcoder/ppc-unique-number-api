@@ -18,7 +18,7 @@ public sealed record PaymentReceipt
     public required string Timestamp { get; init; }
 
     [JsonPropertyName("externalId")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+   // [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ExternalId { get; init; }
 
     public string EncodeHeader() =>

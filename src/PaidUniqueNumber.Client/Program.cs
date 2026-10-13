@@ -15,16 +15,19 @@ using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
 
 Console.WriteLine($"Requesting {url}");
 using var unpaid = await http.GetAsync(url);
-Console.WriteLine($"First response: {(int)unpaid.StatusCode} {unpaid.ReasonPhrase}");
+
+var challenges = WwwAuthenticate.Parse(
+    unpaid.Headers.WwwAuthenticate.Select(h => $"{h.Scheme} {h.Parameter}"));
+    Console.WriteLine();
+    Console.WriteLine($"First response: \x1b[36m {(int)unpaid.StatusCode} {unpaid.ReasonPhrase} \x1b[0m for Challenge ID \x1b[35m {challenges.FirstOrDefault()?.Id ?? "none"} \x1b[0m with Payment Info {Base64Url.DecodeUtf8(challenges.FirstOrDefault()?.Request ?? "")}");
 
 if (unpaid.StatusCode != (HttpStatusCode)402)
 {
+    Console.WriteLine();
     Console.WriteLine(await unpaid.Content.ReadAsStringAsync());
     return unpaid.IsSuccessStatusCode ? 0 : 1;
 }
 
-var challenges = WwwAuthenticate.Parse(
-    unpaid.Headers.WwwAuthenticate.Select(h => $"{h.Scheme} {h.Parameter}"));
 if (challenges.Count == 0)
 {
     Console.Error.WriteLine("402 response did not include a Payment WWW-Authenticate challenge.");
@@ -33,7 +36,8 @@ if (challenges.Count == 0)
 
 foreach (var offered in challenges)
 {
-    Console.WriteLine($"Offered method={offered.Method} amount challenge id={offered.Id}");
+    Console.WriteLine();
+    Console.WriteLine($"Offered method={offered.Method} payment={Base64Url.DecodeUtf8(offered.Request)} challenge ID \x1b[35m {offered.Id} \x1b[0m");
 }
 
 var credential = await CreateCredentialAsync(challenges);
@@ -45,8 +49,12 @@ if (credential is null)
 
 using var paidRequest = new HttpRequestMessage(HttpMethod.Get, url);
 paidRequest.Headers.TryAddWithoutValidation("Authorization", credential.EncodeAuthorization());
+Console.WriteLine();
+Console.WriteLine($"Now sending payment credential for method={credential.Challenge.Method} challenge ID \x1b[35m {credential.Challenge.Id} \x1b[0m with payload=\x1b[33m {credential.Payload} \x1b[0m ");
+
 using var paid = await http.SendAsync(paidRequest);
 var body = await paid.Content.ReadAsStringAsync();
+Console.WriteLine();
 Console.WriteLine($"Paid response: {(int)paid.StatusCode} {paid.ReasonPhrase}");
 Console.WriteLine(body);
 
@@ -55,7 +63,8 @@ if (paid.Headers.TryGetValues("Payment-Receipt", out var receipts))
     var receipt = PaymentReceipt.TryDecode(receipts.First());
     if (receipt is not null)
     {
-        Console.WriteLine($"Receipt method={receipt.Method} reference={receipt.Reference} status={receipt.Status}");
+        Console.WriteLine();
+        Console.WriteLine($"Receipt method={receipt.Method} reference=\x1b[34m {receipt.Reference} \x1b[0m status={receipt.Status} challenge ID= \x1b[35m{receipt.ExternalId}\x1b[0m");
     }
 }
 
@@ -118,7 +127,9 @@ async Task<string> CreateTestSptAsync(string amountCents, string currency)
         "Basic",
         Convert.ToBase64String(Encoding.ASCII.GetBytes(stripeSecret + ":")));
     request.Headers.TryAddWithoutValidation("Stripe-Version", stripeVersion);
-
+Console.WriteLine();
+Console.WriteLine("Time now is " + DateTimeOffset.UtcNow);
+Console.WriteLine($"Creating a stripe SPT with amount {amountCents} cents of {currency} that expires at {DateTimeOffset.FromUnixTimeSeconds(long.Parse(expiresAt))}");
     using var response = await http.SendAsync(request);
     var json = await response.Content.ReadAsStringAsync();
     if (!response.IsSuccessStatusCode)
@@ -127,6 +138,7 @@ async Task<string> CreateTestSptAsync(string amountCents, string currency)
     }
 
     using var document = JsonDocument.Parse(json);
+    Console.WriteLine($"Created SPT: \x1b[33m {document.RootElement.GetProperty("id").GetString()}\x1b[0m");
     return document.RootElement.GetProperty("id").GetString()
         ?? throw new InvalidOperationException("Stripe did not return an SPT id.");
 }

@@ -18,7 +18,7 @@ public sealed class MppChargeService(
         var authorization = request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorization))
         {
-            return PaymentRequired(challenges, "payment-required", "This resource costs USD 0.50 per call.");
+            return PaymentRequired(challenges, "payment-required", "This resource costs USD 0.50 per call. The challenge ID is " + challenges[0].Id);
         }
 
         PaymentCredential credential;
@@ -34,7 +34,7 @@ public sealed class MppChargeService(
         var wire = credential.Challenge.ToWire();
         if (!ChallengeBinder.Matches(options.SecretKey, wire))
         {
-            return PaymentRequired(challenges, "invalid-challenge", "The Challenge id is not bound to these payment terms.");
+            return PaymentRequired(challenges, "invalid-challenge", "The Challenge id {wire.Id} is not bound to these payment terms.");
         }
 
         var expiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
@@ -103,6 +103,7 @@ public sealed class MppChargeService(
             {
                 Method = "stripe",
                 Reference = payment.Id,
+                ExternalId = wire.Id,
                 Timestamp = DateTimeOffset.UtcNow.ToString("O"),
             };
         }
@@ -220,7 +221,8 @@ internal sealed class PaymentRequiredResult(
         {
             httpContext.Response.Headers.Append("WWW-Authenticate", WwwAuthenticate.Format(challenge));
         }
-
+        Console.WriteLine("s");
+        Console.WriteLine("Payment Required and the challenge ID is: \x1b[36m" + challenges[0].Id+"\x1b[0m");
         await httpContext.Response.WriteAsJsonAsync(new ProblemDetails
         {
             Type = $"https://paymentauth.org/problems/{code}",

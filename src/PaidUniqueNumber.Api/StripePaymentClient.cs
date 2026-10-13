@@ -36,7 +36,8 @@ public sealed class StripePaymentClient(HttpClient http, StripeOptions stripe)
             Convert.ToBase64String(Encoding.ASCII.GetBytes(stripe.SecretKey + ":")));
         request.Headers.TryAddWithoutValidation("Stripe-Version", stripe.ApiVersion);
         request.Headers.TryAddWithoutValidation("Idempotency-Key", $"mpp_{challengeId}_{spt}");
-
+        Console.WriteLine();
+        Console.WriteLine($"StripePaymentClient: Sending request to Stripe for challenge ID {challengeId} with SPT {spt} and amount {amountCents} {currency}");
         using var response = await http.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);

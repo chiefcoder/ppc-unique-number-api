@@ -35,7 +35,8 @@ app.MapMethods("/unique-number", ["GET", "POST"], async (
     MppChargeService mpp,
     UniqueNumberIssuer numbers) =>
 {
-    System.Diagnostics.Debug.WriteLine("Now processing request: " + request.Method + " " + request.Path);
+    Console.WriteLine();
+    Console.WriteLine("Now processing request: " + request.Method + " " + request.Path);
     return await mpp.ChargeAsync(request, _ =>
         Results.Json(new
         {
