@@ -4,6 +4,26 @@ ASP.NET Core API that returns a unique number after a **$0.50** Machine Payments
 
 There is no official C# MPP SDK, so this implements the HTTP `402` Challenge → Credential → Receipt flow from [mpp.dev](https://mpp.dev/protocol). Card charges use Stripe Shared Payment Tokens (minimum $0.50). A local `demo` method is on by default so you can run without Stripe keys.
 
+## How a paid API call works
+
+```mermaid
+sequenceDiagram
+	autonumber
+	participant C as Client
+	participant A as API
+	participant P as Payment provider
+	C->>A: Request resource
+	A-->>C: 402 Payment Required + MPP challenge
+	Note over C,A: Challenge includes the payment method and terms
+	C->>P: Create payment credential (for example, Stripe SPT)
+	P-->>C: Payment credential
+	C->>A: Retry request + MPP Authorization credential
+	A->>A: Verify challenge and credential
+	A->>P: Confirm charge (Stripe method)
+	P-->>A: Payment confirmed
+	A-->>C: 200 Resource + Payment-Receipt
+```
+
 ## Run locally (demo payment)
 
 Terminal 1:
