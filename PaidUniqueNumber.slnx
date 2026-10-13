@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PaidUniqueNumber.Api/PaidUniqueNumber.Api.csproj" />
+    <Project Path="src/PaidUniqueNumber.Client/PaidUniqueNumber.Client.csproj" />
+    <Project Path="src/PaidUniqueNumber.Mpp/PaidUniqueNumber.Mpp.csproj" />
+  </Folder>
+</Solution>
