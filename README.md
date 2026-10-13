@@ -1,4 +1,4 @@
-# Pay-per-call unique-number API (MPP)
+# Pay-per-use unique-number API (using MPP)
 
 ASP.NET Core API that returns a unique number after a **$0.50** Machine Payments Protocol (MPP) charge, plus a C# client that pays and retries.
 
